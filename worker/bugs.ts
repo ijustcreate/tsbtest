@@ -108,12 +108,17 @@ export async function saveSharedState(request: Request, env: Env) {
       updatedAt: current?.updated_at ?? null
     }, 409, { [SHARED_STATE_VERSION_HEADER]: current?.updated_at ?? MISSING_SHARED_STATE_VERSION });
   }
-  const room = env.LIVE_ROOM.get(env.LIVE_ROOM.idFromName("museum"));
-  await room.fetch(new Request("https://live-room.internal/broadcast", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ type: "state-invalidated", version: updatedAt })
-  }));
+  try {
+    const room = env.LIVE_ROOM.get(env.LIVE_ROOM.idFromName("museum"));
+    await room.fetch(new Request("https://live-room.internal/broadcast", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "state-invalidated", version: updatedAt })
+    }));
+  } catch {
+    // The state is already committed. A reconnecting client will recover it
+    // through its normal authoritative read if this notification is unavailable.
+  }
   return json(request, { saved: true, updatedAt }, 200, { [SHARED_STATE_VERSION_HEADER]: updatedAt });
 }
 

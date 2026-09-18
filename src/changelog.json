@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0658",
+    "title": "Make update notifications non-blocking",
+    "summary": "Keep shared saves successful even if the live invalidation broadcast is temporarily unavailable; reconnecting clients recover through the authoritative state read.",
+    "author": "Codex",
+    "createdAt": "Sep 18, 2026, 9:04 AM",
+    "areas": [
+      "Shared state sync",
+      "Durable Objects"
+    ],
+    "files": [
+      "worker/bugs.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0657",
     "title": "Push shared-state invalidations to displays",
     "summary": "Broadcast a versioned invalidation event after successful saves so displays fetch updates on demand, while removing continuous display-wall state polling and adding a safe /tsbtest GitHub Pages build path.",
