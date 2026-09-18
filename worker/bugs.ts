@@ -108,6 +108,12 @@ export async function saveSharedState(request: Request, env: Env) {
       updatedAt: current?.updated_at ?? null
     }, 409, { [SHARED_STATE_VERSION_HEADER]: current?.updated_at ?? MISSING_SHARED_STATE_VERSION });
   }
+  const room = env.LIVE_ROOM.get(env.LIVE_ROOM.idFromName("museum"));
+  await room.fetch(new Request("https://live-room.internal/broadcast", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type: "state-invalidated", version: updatedAt })
+  }));
   return json(request, { saved: true, updatedAt }, 200, { [SHARED_STATE_VERSION_HEADER]: updatedAt });
 }
 
@@ -166,12 +172,18 @@ export class MuseumLiveRoom {
   constructor(private state: DurableObjectState) {}
 
   async fetch(request: Request): Promise<Response> {
+    if (request.method === "POST" && new URL(request.url).pathname === "/broadcast") {
+      const message = await request.text();
+      if (message.length > 4_000) return new Response("Message too large", { status: 413 });
+      for (const socket of this.state.getWebSockets()) socket.send(JSON.stringify({ sender: "server", message: JSON.parse(message) }));
+      return new Response(null, { status: 204 });
+    }
     if (request.headers.get("Upgrade") !== "websocket") {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
       const sessions = (await this.state.storage.get<Record<string, Record<string, unknown>>>("display-sessions")) ?? {};
       const history = (await this.state.storage.get<unknown[]>("display-history")) ?? [];
       const now = Date.now();
-      const active = Object.values(sessions).filter((item) => item.online !== false && now - Number(item.serverSeenAt ?? 0) <= 5_000).map(({ networkAddress: _networkAddress, userAgent: _userAgent, ...safe }) => safe);
+      const active = Object.values(sessions).filter((item) => item.online !== false && now - Number(item.serverSeenAt ?? 0) <= 30_000).map(({ networkAddress: _networkAddress, userAgent: _userAgent, ...safe }) => safe);
       return Response.json({ sessions: active, history: history.slice(-100) });
     }
     const pair = new WebSocketPair();
@@ -198,21 +210,28 @@ export class MuseumLiveRoom {
           const seenAt = typeof (value as { serverSeenAt?: number }).serverSeenAt === "number" ? (value as { serverSeenAt: number }).serverSeenAt : 0;
           if (now - seenAt > 15_000) delete sessions[key];
         }
-        const prior = sessions[presence.deviceId] as { serverSeenAt?: number } | undefined;
+        const prior = sessions[presence.deviceId] as { serverSeenAt?: number; screenId?: string; deviceName?: string; userAgent?: string; online?: boolean } | undefined;
         const status = presence.type === "display-presence" ? "opened" : presence.status!;
-        const history = (await this.state.storage.get<Array<Record<string, unknown>>>("display-history")) ?? [];
-        if (status !== "opened" || !prior || now - Number(prior.serverSeenAt ?? 0) > 5_000) history.push({ screenId: presence.screenId, deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120), status, at: now });
-        if (history.length > 100) history.splice(0, history.length - 100);
-        await this.state.storage.put("display-history", history);
-        sessions[presence.deviceId] = {
+        const deviceName = String(presence.deviceName ?? "Display browser").slice(0, 120);
+        const userAgent = String(presence.userAgent ?? attachment?.userAgent ?? "").slice(0, 500);
+        const meaningfulChange = !prior || prior.screenId !== presence.screenId || prior.deviceName !== deviceName || prior.userAgent !== userAgent || prior.online !== (status !== "offline" && status !== "closed") || status !== "opened";
+        const persistPresence = meaningfulChange || now - Number(prior?.serverSeenAt ?? 0) >= 15_000;
+        if (meaningfulChange) {
+          const history = (await this.state.storage.get<Array<Record<string, unknown>>>("display-history")) ?? [];
+          if (status !== "opened" || !prior || now - Number(prior.serverSeenAt ?? 0) > 15_000) history.push({ screenId: presence.screenId, deviceName, status, at: now });
+          if (history.length > 100) history.splice(0, history.length - 100);
+          await this.state.storage.put("display-history", history);
+        }
+        const nextSession = {
           screenId: presence.screenId,
-          deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120),
-          userAgent: String(presence.userAgent ?? attachment?.userAgent ?? "").slice(0, 500),
+          deviceName,
+          userAgent,
           networkAddress: attachment?.networkAddress,
-          serverSeenAt: now,
+          serverSeenAt: persistPresence ? now : Number(prior?.serverSeenAt ?? now),
           online: status !== "offline" && status !== "closed"
         };
-        await this.state.storage.put("display-sessions", sessions);
+        sessions[presence.deviceId] = nextSession;
+        if (persistPresence) await this.state.storage.put("display-sessions", sessions);
       }
     } catch {
       // Signaling can be relayed without telemetry if a client sends a legacy payload.

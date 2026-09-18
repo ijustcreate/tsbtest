@@ -348,7 +348,14 @@ function TvModeApp() {
       }
     };
     void refresh();
-    const channel = createHostChannel((message) => { if (message.type === "state-update") setState(message.state); });
+    const channel = createHostChannel((message) => {
+      if (message.type === "state-update") setState(message.state);
+      if (message.type === "state-invalidated") {
+        void loadAuthoritativeLanternState({ preferShared: true }).then((loaded) => {
+          if (mounted) setState(loaded.state);
+        });
+      }
+    });
     return () => { mounted = false; channel.close(); };
   }, []);
 
@@ -559,7 +566,7 @@ function ControlCenter() {
       setDisplayPresence(Object.fromEntries(lastSeen));
     });
     const prune = window.setInterval(() => {
-      const cutoff = Date.now() - 5_000;
+      const cutoff = Date.now() - 30_000;
       let changed = false;
       lastSeen.forEach((presence, screenId) => {
         if (Date.parse(presence.timestamp) < cutoff) {
@@ -6839,7 +6846,7 @@ function LivePreviewPanel({
       const now = Date.now();
       let changed = false;
       presence.forEach((seenAt, screenId) => {
-        if (now - seenAt > 5_000) {
+        if (now - seenAt > 30_000) {
           presence.delete(screenId);
           changed = true;
         }
@@ -10492,12 +10499,12 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
       }
     };
     void refreshLiveState();
-    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") {
         refreshGuard.current.receivedLiveUpdate();
         setState(message.state);
       }
+      if (message.type === "state-invalidated") void refreshLiveState();
     });
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshLiveState();
@@ -10506,7 +10513,6 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       mounted = false;
-      window.clearInterval(interval);
       channel.close();
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);

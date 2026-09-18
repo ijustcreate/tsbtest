@@ -5,7 +5,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const bugRoot = path.resolve(".lantern", "bugs");
-const pagesBase = process.env.GITHUB_ACTIONS ? "/toysoldierbrigade/" : "/";
+const pagesBase = process.env.VITE_PAGES_PATH || (process.env.GITHUB_ACTIONS ? "/toysoldierbrigade/" : "/");
 const pagesAssetPrefix = pagesBase.replace(/\/$/, "");
 const appBuild = process.env.GITHUB_SHA?.slice(0, 7) ?? "local";
 

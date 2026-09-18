@@ -434,7 +434,10 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
       onStream(null);
     }
   });
-  const presenceTimer = window.setInterval(announcePresence, 1800);
+  // Presence is used for discovery and reconnects, not as a high-frequency
+  // transport heartbeat. The WebSocket itself remains available for control
+  // messages, while the Durable Object rate-limits persisted presence.
+  const presenceTimer = window.setInterval(announcePresence, 10_000);
   const telemetryTimer = window.setInterval(() => {
     if (!peer || peer.connectionState !== "connected") return;
     void peer.getStats().then((stats) => {

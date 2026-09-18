@@ -930,6 +930,7 @@ export interface LanternState {
 
 export type HostMessage =
   | import("./host/roomCameraProtocol").RoomCameraMessage
+  | { type: "state-invalidated"; version: string }
   | { type: "state-update"; state: LanternState }
   | { type: "identify-screen"; screenId: ScreenId }
   | { type: "live-stop"; target: TargetScreen }

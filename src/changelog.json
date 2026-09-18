@@ -1,5 +1,42 @@
 [
   {
+    "id": "DEV-0657",
+    "title": "Push shared-state invalidations to displays",
+    "summary": "Broadcast a versioned invalidation event after successful saves so displays fetch updates on demand, while removing continuous display-wall state polling and adding a safe /tsbtest GitHub Pages build path.",
+    "author": "Codex",
+    "createdAt": "Sep 18, 2026, 9:01 AM",
+    "areas": [
+      "Shared state sync",
+      "Display refresh",
+      "Test deployment"
+    ],
+    "files": [
+      "worker/bugs.ts",
+      "src/types.ts",
+      "src/App.tsx",
+      "vite.config.ts",
+      ".github/workflows/deploy-test-pages.yml"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0656",
+    "title": "Reduce Durable Object heartbeat writes",
+    "summary": "Keep many displays online and controllable while reducing durable presence writes by moving client presence to a 10-second interval, persisting only meaningful changes or 15-second freshness updates, and widening the read freshness window.",
+    "author": "Codex",
+    "createdAt": "Sep 18, 2026, 8:50 AM",
+    "areas": [
+      "Display presence",
+      "Durable Objects",
+      "Live control"
+    ],
+    "files": [
+      "src/host/videoBridge.ts",
+      "worker/bugs.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0655",
     "title": "Prevent unsafe image textures from blanking the app",
     "summary": "Load board images and videos with CORS and recover failed WebGL texture uploads in Canvas 2D while preserving the authored layout and saved board data.",
